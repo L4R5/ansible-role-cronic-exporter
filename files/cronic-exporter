@@ -1,0 +1,75 @@
+#!/bin/bash
+
+# Cronic v3 - cron job report wrapper
+# Copyright 2007-2016 Chuck Houpt. No rights reserved, whatsoever.
+# Public Domain CC0: http://creativecommons.org/publicdomain/zero/1.0/
+# Taken from: https://habilis.net/cronic/
+
+set -eu
+
+TMP=$(mktemp -d)
+OUT=$TMP/cronic.out
+ERR=$TMP/cronic.err
+TRACE=$TMP/cronic.trace
+NODE_EXPORTER_DIR="/var/lib/prometheus/node-exporter"
+
+job=$1
+shift
+
+start=$(date +%s)
+set +e
+"$@" >$OUT 2>$TRACE
+RESULT=$?
+set -e
+finish=$(date +%s)
+duration=$(( finish - start ))
+
+PATTERN="^${PS4:0:1}\\+${PS4:1}"
+if grep -aq "$PATTERN" $TRACE
+then
+    ! grep -av "$PATTERN" $TRACE > $ERR
+else
+    ERR=$TRACE
+fi
+
+if [ $RESULT -ne 0 -o -s "$ERR" ]
+    then
+    echo "Cronic detected failure or error output for the command:"
+    echo "$@"
+    echo
+    echo "RESULT CODE: $RESULT"
+    echo
+    echo "ERROR OUTPUT:"
+    cat "$ERR"
+    echo
+    echo "STANDARD OUTPUT:"
+    cat "$OUT"
+    if [ $TRACE != $ERR ]
+    then
+        echo
+        echo "TRACE-ERROR OUTPUT:"
+        cat "$TRACE"
+    fi
+fi
+
+
+# exporting metrics via node exporter is optional
+if [ -d "$NODE_EXPORTER_DIR" ]; then
+  prom_file="cron_job_${job}".prom
+  prom_file_tmp="$prom_file.tmp"
+  cat > "$TMP/$prom_file_tmp" << EOF
+# HELP cron_job_exit Exit code of cron job.
+# TYPE cron_job_exit gauge
+cron_job_exit{name="$job"} $RESULT
+# HELP cron_job_last Time latest run finished.
+# TYPE cron_job_last gauge
+cron_job_last{name="$job"} $finish
+# HELP cron_job_duration Duration of latest run in seconds.
+# TYPE cron_job_duration gauge
+cron_job_duration{name="$job"} $duration
+EOF
+  mv "$TMP/$prom_file_tmp" "$NODE_EXPORTER_DIR/$prom_file"
+fi
+
+rm -rf "$TMP"
+

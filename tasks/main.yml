@@ -1,0 +1,9 @@
+---
+- name: Install cronic cron wrapper
+  copy: 
+    src: cronic-exporter
+    dest: /usr/local/bin/cronic-exporter
+    owner: root
+    group: root
+    mode: "0755"
+
