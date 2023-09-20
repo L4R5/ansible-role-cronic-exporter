@@ -68,7 +68,7 @@ cron_job_last{name="$job"} $finish
 # TYPE cron_job_duration gauge
 cron_job_duration{name="$job"} $duration
 EOF
-  mv "$TMP/$prom_file_tmp" "$NODE_EXPORTER_DIR/$prom_file"
+  cp "$TMP/$prom_file_tmp" "$NODE_EXPORTER_DIR/$prom_file"
 fi
 
 rm -rf "$TMP"
